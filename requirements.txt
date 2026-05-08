@@ -1,0 +1,6 @@
+langchain
+langchain-community
+langchain-core
+openai
+pandas
+python-dotenv
