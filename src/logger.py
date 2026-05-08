@@ -44,7 +44,7 @@ def get_summary() -> dict:
 
     Returns:
         dict with keys: total_processed, total_sent, total_skipped, total_errors,
-        and a copy of all log entries.
+        and a copy of all log entries so callers cannot mutate the internal list.
     """
     total_processed = sum(1 for e in _log if e["action"] == "email_generated")
     total_sent = sum(1 for e in _log if e["result"] in ("sent", "dry_run"))
@@ -58,6 +58,16 @@ def get_summary() -> dict:
         "total_errors": total_errors,
         "log": list(_log),
     }
+
+
+def reset() -> None:
+    """
+    Clear the in-memory log.
+
+    Call this at the start of each agent run to prevent entries from a
+    previous run (in the same Python process) bleeding into the next report.
+    """
+    _log.clear()
 
 
 def flush_report(output_dir: str) -> str:
