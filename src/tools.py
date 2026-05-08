@@ -32,7 +32,7 @@ from prompts.email_prompt import get_prompt_for_tier
 def _get_llm() -> ChatOpenAI:
     """Return a ChatOpenAI instance configured from src/config.py."""
     return ChatOpenAI(
-        model="gpt-4o-mini",
+        model=config.LLM_MODEL,
         api_key=config.LLM_API_KEY,
         temperature=0.4,
     )
@@ -43,7 +43,7 @@ def _get_llm() -> ChatOpenAI:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @tool
-def get_pending_invoices(dummy: str = "") -> str:
+def get_pending_invoices(query: str = "") -> str:
     """
     Retrieve all pending invoices that need a follow-up email.
 
@@ -51,6 +51,7 @@ def get_pending_invoices(dummy: str = "") -> str:
     invoice_no, client_name, invoice_amount, days_overdue, urgency_tier.
 
     Use this tool first to understand which invoices require action.
+    Pass an empty string as input.
     """
     df = load_invoices(config.DATA_PATH)
     triaged = triage_invoices(df)
@@ -271,12 +272,13 @@ def update_invoice_record(invoice_no: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 @tool
-def generate_run_report(dummy: str = "") -> str:
+def generate_run_report(query: str = "") -> str:
     """
     Generate and return a structured summary of everything the agent did
     during this run. Also writes the full report to the outputs/ directory.
 
     Call this tool last, after all invoices have been processed.
+    Pass an empty string as input.
 
     Returns a JSON object with total_processed, total_sent, total_skipped,
     total_errors, and the full action log.

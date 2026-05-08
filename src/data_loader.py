@@ -8,7 +8,6 @@ without data loss or column reordering.
 
 import pandas as pd
 from datetime import date
-from pathlib import Path
 
 
 # Canonical column order — must match the original CSV header exactly.

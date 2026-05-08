@@ -16,19 +16,9 @@ BASE_DIR: Path = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 
-def _require(key: str) -> str:
-    """Return env var value or raise a clear error if it is missing."""
-    value = os.getenv(key)
-    if not value:
-        raise EnvironmentError(
-            f"Required environment variable '{key}' is not set. "
-            f"Copy .env.example to .env and fill in your values."
-        )
-    return value
-
-
 # ── LLM ──────────────────────────────────────────────────────────────────────
 LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
+LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o-mini")
 
 # ── SMTP ─────────────────────────────────────────────────────────────────────
 SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
