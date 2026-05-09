@@ -16,9 +16,10 @@ BASE_DIR: Path = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 
-# ── LLM ──────────────────────────────────────────────────────────────────────
-LLM_API_KEY: str = os.getenv("LLM_API_KEY", "")
-LLM_MODEL: str = os.getenv("LLM_MODEL", "gpt-4o-mini")
+# ── LLM (Groq) ─────────────────────────────────────────────────────────────
+# Accept GROQ_API_KEY or the legacy LLM_API_KEY name — both work.
+GROQ_API_KEY: str = os.getenv("GROQ_API_KEY") or os.getenv("LLM_API_KEY", "")
+LLM_MODEL: str = os.getenv("LLM_MODEL", "llama-3.1-8b-instant")
 
 # ── SMTP ─────────────────────────────────────────────────────────────────────
 SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")

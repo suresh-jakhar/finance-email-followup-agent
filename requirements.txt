@@ -1,8 +1,8 @@
 langchain
 langchain-community
 langchain-core
-langchain-openai
+langchain-groq
 langgraph
-openai
+groq
 pandas
 python-dotenv

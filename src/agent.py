@@ -9,8 +9,8 @@ Uses langgraph.prebuilt.create_react_agent — the current recommended pattern
 for LangChain >= 1.0 where AgentExecutor has been removed.
 """
 
-from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage
+from langchain_groq import ChatGroq
 from langgraph.prebuilt import create_react_agent
 
 from src import config, logger
@@ -49,9 +49,9 @@ def _build_agent(verbose: bool = True):
     Returns:
         A compiled LangGraph agent graph ready to invoke.
     """
-    llm = ChatOpenAI(
+    llm = ChatGroq(
         model=config.LLM_MODEL,
-        api_key=config.LLM_API_KEY,
+        api_key=config.GROQ_API_KEY,
         temperature=0,      # deterministic — no creative latitude for finance ops
     )
 

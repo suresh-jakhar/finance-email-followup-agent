@@ -18,7 +18,7 @@ import json
 from datetime import datetime, timezone
 
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
+from langchain_groq import ChatGroq
 
 from src import config, logger
 from src.data_loader import load_invoices, save_invoices
@@ -29,11 +29,11 @@ from prompts.email_prompt import get_prompt_for_tier
 
 # ── Shared LLM instance (lazy — only used by generate_followup_email) ─────────
 
-def _get_llm() -> ChatOpenAI:
-    """Return a ChatOpenAI instance configured from src/config.py."""
-    return ChatOpenAI(
+def _get_llm() -> ChatGroq:
+    """Return a ChatGroq instance configured from src/config.py."""
+    return ChatGroq(
         model=config.LLM_MODEL,
-        api_key=config.LLM_API_KEY,
+        api_key=config.GROQ_API_KEY,
         temperature=0.4,
     )
 
