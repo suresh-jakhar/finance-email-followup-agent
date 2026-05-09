@@ -68,7 +68,7 @@ def _build_agent(verbose: bool = True):
     )
 
 
-def run_agent(verbose: bool = True) -> dict:
+def run_agent(limit: int = None, verbose: bool = True) -> dict:
     """
     Orchestrate the full follow-up pipeline and return the run summary.
 
@@ -80,6 +80,7 @@ def run_agent(verbose: bool = True) -> dict:
     to generate a personalised email. Only the outer loop is Python.
 
     Args:
+        limit: Maximum number of invoices to process in this run. If None, process all.
         verbose: If True, prints progress for each invoice.
 
     Returns:
@@ -91,6 +92,10 @@ def run_agent(verbose: bool = True) -> dict:
 
     # ── Phase 1: retrieve the triaged invoice list ───────────────────────────
     invoices = json.loads(get_pending_invoices.invoke(""))
+    
+    if limit is not None:
+        invoices = invoices[:limit]
+
     total = len(invoices)
     if verbose:
         print(f"\n[AGENT] {total} invoices to process.\n")

@@ -6,3 +6,5 @@ langgraph
 groq
 pandas
 python-dotenv
+streamlit
+plotly

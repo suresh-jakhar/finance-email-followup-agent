@@ -21,9 +21,16 @@ def _parse_args() -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "Examples:\n"
-            "  python main.py --dry-run   # simulate without sending\n"
-            "  python main.py --send      # send real emails via SMTP\n"
+            "  python main.py --dry-run          # simulate without sending\n"
+            "  python main.py --send             # send real emails via SMTP\n"
+            "  python main.py --dry-run --limit 5  # test just 5 invoices\n"
         ),
+    )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Maximum number of invoices to process in this run",
     )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
@@ -83,7 +90,7 @@ def main() -> int:
     # 3. Run the agent
     try:
         from src.agent import run_agent   # deferred import — respects patched config.DRY_RUN
-        summary = run_agent(verbose=True)
+        summary = run_agent(limit=args.limit, verbose=True)
     except KeyboardInterrupt:
         print("\n[INTERRUPTED] Run cancelled by user.")
         return 1
