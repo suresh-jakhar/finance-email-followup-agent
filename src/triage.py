@@ -73,8 +73,8 @@ def triage_invoices(df: pd.DataFrame) -> pd.DataFrame:
     """
     result = df.copy()
 
-    # Step 1 — Keep only unpaid invoices
-    result = result[result["payment_status"] == "Pending"]
+    # Step 1 — Keep only unpaid invoices (Pending, Overdue, Critical, etc.)
+    result = result[result["payment_status"] != "Paid"]
 
     # Step 2 — Exclude invoices that aren't yet actionable:
     #   not overdue (days_overdue == 0) AND due date is more than 7 days out
