@@ -5,6 +5,7 @@ Structured, append-only in-memory logger for a single agent run.
 Writes a JSON run report to the outputs/ directory at the end of the run.
 """
 
+import re
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +13,23 @@ from pathlib import Path
 
 # In-memory log for the current run — module-level so every tool call appends here.
 _log: list[dict] = []
+
+
+def mask_pii(text: str) -> str:
+    """
+    Redact sensitive patterns (like emails) from log text.
+    Example: suresh@gmail.com -> s***@gmail.com
+    """
+    def _replacer(match):
+        email = match.group(0)
+        user, domain = email.split("@")
+        if len(user) <= 1:
+            return f"***@{domain}"
+        return f"{user[0]}***@{domain}"
+
+    # Simple email regex for masking
+    email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+    return re.sub(email_pattern, _replacer, text)
 
 
 def log_action(
@@ -34,7 +52,7 @@ def log_action(
         "invoice_no": invoice_no,
         "action": action,
         "result": result,
-        "reason": reason,
+        "reason": mask_pii(reason),
     })
 
 
