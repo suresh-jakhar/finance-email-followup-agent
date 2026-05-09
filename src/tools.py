@@ -332,11 +332,22 @@ def process_invoice(invoice_no: str) -> str:
     urgency_tier: str = raw.get("urgency_tier", "first_followup")
     to_email: str = raw.get("contact_email", "")
 
-    # Guard: n/a means the invoice is paid or not yet actionable
+    # Guard 1 — n/a means the invoice is paid or not yet actionable
     if urgency_tier == "n/a":
         msg = f"Invoice {invoice_no} is not actionable (status: {raw.get('payment_status', 'unknown')})."
         logger.log_action(invoice_no, "process_invoice", "skipped", msg)
         return json.dumps({"status": "skipped", "invoice_no": invoice_no, "reason": msg})
+
+    # Guard 2 — legal_escalation (Stage 5) requires manual human review (per Mandatory Design)
+    from src.triage import TIER_LEGAL
+    if urgency_tier == TIER_LEGAL:
+        msg = f"Invoice {invoice_no} is >30 days overdue (Stage 5). STOP: Manual review required."
+        logger.log_action(invoice_no, "process_invoice", "skipped", msg)
+        return json.dumps({
+            "status": "skipped", 
+            "invoice_no": invoice_no, 
+            "reason": "Escalation Cap Reached: Manual Legal/Finance review required."
+        })
 
     # Step 2 — generate email via LLM (sequential — result used in step 3)
     prompt = get_prompt_for_tier(urgency_tier)

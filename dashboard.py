@@ -10,17 +10,12 @@ from src.config import DATA_PATH, OUTPUT_DIR
 from src.data_loader import load_invoices
 from src.triage import triage_invoices
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CONFIG & PREMIUM STYLING
-# ─────────────────────────────────────────────────────────────────────────────
-
 st.set_page_config(
     page_title="Credit Operations Center",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Professional Finance Palette & Layout
 st.markdown("""
     <style>
     /* Main Background */
@@ -91,9 +86,6 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# DATA LOGIC
-# ─────────────────────────────────────────────────────────────────────────────
 
 @st.cache_data(ttl=60)
 def get_dashboard_data():
@@ -109,9 +101,6 @@ def get_latest_run():
     with open(latest, 'r') as f:
         return json.load(f), latest.name
 
-# ─────────────────────────────────────────────────────────────────────────────
-# UI COMPONENTS
-# ─────────────────────────────────────────────────────────────────────────────
 
 def render_metric(label, value, col):
     with col:
@@ -122,24 +111,19 @@ def render_metric(label, value, col):
             </div>
         """, unsafe_allow_html=True)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# MAIN DASHBOARD
-# ─────────────────────────────────────────────────────────────────────────────
 
 def main():
-    # Header
     st.markdown('<div class="main-title">Credit Operations Center</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-title">Intelligence-driven accounts receivable management and automated recovery.</div>', unsafe_allow_html=True)
     
     df, triaged_df = get_dashboard_data()
     report, report_name = get_latest_run() or (None, None)
 
-    # 1. KPIs
     m1, m2, m3, m4 = st.columns(4)
     
     pending_count = len(df[df['payment_status'] == 'Pending'])
     actionable = len(triaged_df)
-    urgent = len(triaged_df[triaged_df['urgency_tier'].isin(['final_notice', 'escalation'])])
+    urgent = len(triaged_df[triaged_df['urgency_tier'].isin(['stage_4_stern', 'stage_3_serious', 'legal_escalation'])])
     total_val = df[df['payment_status'] == 'Pending']['invoice_amount'].sum()
     
     render_metric("Total Pending", pending_count, m1)
@@ -149,7 +133,6 @@ def main():
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # 2. ANALYSIS GRID
     col_left, col_right = st.columns([1, 1], gap="large")
 
     with col_left:
@@ -157,13 +140,12 @@ def main():
         tier_data = triaged_df['urgency_tier'].value_counts().reset_index()
         tier_data.columns = ['Tier', 'Invoices']
         
-        # Professional color mapping
         colors = {
-            'final_notice': '#e11d48',    # Rose 600
-            'escalation': '#f59e0b',      # Amber 500
-            'second_followup': '#3b82f6', # Blue 500
-            'first_followup': '#10b981',  # Emerald 500
-            'reminder': '#64748b'         # Slate 500
+            'stage_4_stern': '#e11d48',   
+            'stage_3_serious': '#f59e0b',      
+            'stage_2_firm': '#3b82f6', 
+            'stage_1_warm': '#10b981', 
+            'legal_escalation': '#64748b'        
         }
         
         fig = px.bar(
@@ -189,7 +171,6 @@ def main():
     with col_right:
         st.subheader("Latest Dispatch Performance")
         if report:
-            # Clean summary metrics
             c1, c2, c3 = st.columns(3)
             with c1:
                 st.markdown(f"**Processed**<br><span style='font-size:24px'>{report.get('total_processed', 0)}</span>", unsafe_allow_html=True)
@@ -198,7 +179,6 @@ def main():
             with c3:
                 st.markdown(f"**Failed**<br><span style='font-size:24px; color:#e11d48'>{report.get('total_errors', 0)}</span>", unsafe_allow_html=True)
             
-            # Dispatch Progress
             success_pct = (report.get('total_sent', 0) / max(report.get('total_processed', 1), 1))
             st.markdown("<br>", unsafe_allow_html=True)
             st.progress(min(success_pct, 1.0))
@@ -206,12 +186,9 @@ def main():
         else:
             st.info("No active dispatch reports found.")
 
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # 3. DETAILED ACTION QUEUE
+    st.markdown("<br>", unsafe_allow_html=True
     st.subheader("Invoice Action Queue")
     
-    # Filter Controls
     f1, f2 = st.columns([1, 2])
     with f1:
         tier_filter = st.multiselect("Filter by Tier", options=triaged_df['urgency_tier'].unique())
@@ -227,7 +204,6 @@ def main():
             view_df['invoice_no'].str.contains(search, case=False)
         ]
 
-    # Style columns for professional display
     view_df['invoice_amount'] = view_df['invoice_amount'].map('${:,.2f}'.format)
     view_df['due_date'] = view_df['due_date'].dt.strftime('%Y-%m-%d')
     

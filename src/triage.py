@@ -12,12 +12,12 @@ import pandas as pd
 from datetime import date
 
 
-# Urgency tier labels — ordered from lowest to highest severity.
-TIER_REMINDER = "reminder"
-TIER_FIRST_FOLLOWUP = "first_followup"
-TIER_SECOND_FOLLOWUP = "second_followup"
-TIER_ESCALATION = "escalation"
-TIER_FINAL_NOTICE = "final_notice"
+# Urgency tier labels — strictly aligned with the Tone Escalation Matrix.
+TIER_WARM = "stage_1_warm"              # 1-7 days
+TIER_FIRM = "stage_2_firm"              # 8-14 days
+TIER_SERIOUS = "stage_3_serious"        # 15-21 days
+TIER_STERN = "stage_4_stern"            # 22-30 days
+TIER_LEGAL = "legal_escalation"         # 30+ days (STOP)
 
 
 def _assign_tier(row: pd.Series) -> str:
@@ -27,34 +27,30 @@ def _assign_tier(row: pd.Series) -> str:
     Precedence matters: final_notice must be evaluated before escalation
     because its conditions are a strict superset of escalation conditions.
 
-    Escalation ladder (from the implementation plan):
-    - final_notice   : days_overdue > 60  OR  followup_count >= 5
-    - escalation     : days_overdue > 30  OR  followup_count >= 4
-    - second_followup: 16 <= days_overdue <= 30  OR  followup_count in {2, 3}
-    - first_followup : days_overdue <= 15  AND  followup_count <= 1
-    - reminder       : days_overdue == 0  AND  followup_count == 0
+    Escalation ladder (aligned with Tone Escalation Matrix):
+    - legal_escalation : days_overdue > 30
+    - stage_4_stern    : 22 <= days_overdue <= 30
+    - stage_3_serious  : 15 <= days_overdue <= 21
+    - stage_2_firm     : 8 <= days_overdue <= 14
+    - stage_1_warm     : 1 <= days_overdue <= 7
     """
     days: int = int(row["days_overdue"])
-    count: int = int(row["followup_count"])
 
-    if days > 60 or count >= 5:
-        return TIER_FINAL_NOTICE
+    if days > 30:
+        return TIER_LEGAL
 
-    if days > 30 or count >= 4:
-        return TIER_ESCALATION
+    if 22 <= days <= 30:
+        return TIER_STERN
 
-    if (16 <= days <= 30) or count in (2, 3):
-        return TIER_SECOND_FOLLOWUP
+    if 15 <= days <= 21:
+        return TIER_SERIOUS
 
-    if days <= 15 and count <= 1:
-        # Distinguish a first-ever reminder (nothing sent yet, not overdue)
-        # from a first follow-up (already overdue or one prior send).
-        if days == 0 and count == 0:
-            return TIER_REMINDER
-        return TIER_FIRST_FOLLOWUP
+    if 8 <= days <= 14:
+        return TIER_FIRM
 
-    # Fallback — shouldn't be reached given filter logic, but be explicit
-    return TIER_FIRST_FOLLOWUP
+    # Default to warm if it's anywhere from 1 to 7 days
+    # (or 0 if it's the exact due date, assuming oversight)
+    return TIER_WARM
 
 
 def triage_invoices(df: pd.DataFrame) -> pd.DataFrame:
