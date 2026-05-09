@@ -1,7 +1,9 @@
 invoice_no,client_name,invoice_amount,due_date,contact_email,followup_count,payment_status,last_followup_date,days_overdue
 INV-1013,Apex Solutions,5420.75,2026-05-02,E23CSEU1013@bennett.edu.in,1,Pending,2026-05-06,7
-INV-1010,NovaTech Systems,12890.40,2026-04-10,E23CSEU1010@bennett.edu.in,3,Overdue,2026-05-08,29
-INV-1018,GreenField Pvt Ltd,3150.00,2026-05-18,E23CSEU1018@bennett.edu.in,0,Pending,,0
+INV-1010,NovaTech Systems,12890.4,2026-04-10,E23CSEU1010@bennett.edu.in,5,Overdue,2026-05-09,29
+INV-1018,GreenField Pvt Ltd,3150.0,2026-05-18,E23CSEU1018@bennett.edu.in,0,Pending,,0
 INV-0939,Zenith Corp,22145.99,2026-03-28,E23CSEU0939@bennett.edu.in,5,Critical,2026-05-09,42
-INV-0940,BlueWave Media,7850.50,2026-04-22,E23CSEU0940@bennett.edu.in,2,Pending,2026-05-05,17
+INV-0940,BlueWave Media,7850.5,2026-04-22,E23CSEU0940@bennett.edu.in,4,Pending,2026-05-09,17
 INV-0931,Skyline Ventures,4999.99,2026-03-15,E23CSEU0931@bennett.edu.in,6,Overdue,2026-05-07,55
+INV-0938,Velocity Labs,9675.3,2026-04-18,E23CSEU0938@bennett.edu.in,6,Pending,2026-05-09,21
+INV-2025,CricketVerse Media,15420.80,2026-03-30,cricketception@gmail.com,5,Overdue,2026-05-09,40

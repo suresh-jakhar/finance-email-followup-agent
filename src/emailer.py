@@ -9,6 +9,7 @@ and returned as an error dict.
 import smtplib
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
+from email.utils import formatdate, make_msgid
 
 from src import config
 
@@ -44,8 +45,11 @@ def send_email(to: str, subject: str, body: str) -> dict:
     # Build the MIME message
     msg = MIMEText(body, "plain")
     msg["Subject"] = subject
-    msg["From"] = config.SMTP_USER
+    msg["From"] = f"{config.SMTP_SENDER_NAME} <{config.SMTP_USER}>"
     msg["To"] = to
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid()
+    msg["Reply-To"] = config.SMTP_USER
 
     try:
         with smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT) as server:
