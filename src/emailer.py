@@ -33,9 +33,7 @@ def send_email(to: str, subject: str, body: str) -> dict:
     timestamp = datetime.now(tz=timezone.utc).isoformat()
 
     if config.DRY_RUN:
-        print(f"\n[DRY RUN] Email to: {to}")
-        print(f"[DRY RUN] Subject : {subject}")
-        print(f"[DRY RUN] Body    :\n{body}\n")
+        print(f"[DRY RUN] to={to} | subject={subject[:80]}")
         return {
             "status": "dry_run",
             "to": to,

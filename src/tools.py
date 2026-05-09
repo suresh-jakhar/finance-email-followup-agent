@@ -5,16 +5,18 @@ LangChain tool definitions used by the agent during its reasoning loop.
 Each tool is decorated with @tool so LangChain can describe and call them
 automatically. All tools are importable and manually testable in isolation.
 
-Tool list (6 total):
-  1. get_pending_invoices    — returns triaged invoice summary
-  2. get_invoice_details     — returns full details for one invoice
-  3. generate_followup_email — calls LLM to draft a personalised email
-  4. send_email              — sends or dry-runs a single email
-  5. update_invoice_record   — increments followup_count and persists
-  6. generate_run_report     — returns the structured run summary
+Tool list (7 total):
+  1. get_pending_invoices    - returns triaged invoice summary
+  2. get_invoice_details     - returns full details for one invoice
+  3. process_invoice         - generate + send + update in one sequential call (PRIMARY)
+  4. generate_followup_email - calls LLM to draft a personalised email (standalone)
+  5. send_email              - sends or dry-runs a single email (standalone)
+  6. update_invoice_record   - increments followup_count and persists (standalone)
+  7. generate_run_report     - returns the structured run summary
 """
 
 import json
+import threading
 from datetime import datetime, timezone
 
 from langchain_core.tools import tool
@@ -27,7 +29,11 @@ from src.updater import update_followup
 from src import emailer as emailer_module
 from prompts.email_prompt import get_prompt_for_tier
 
-# ── Shared LLM instance (lazy — only used by generate_followup_email) ─────────
+# ── CSV write lock — prevents concurrent update_invoice_record calls from
+#    trampling each other when the agent batches tool calls in parallel.
+_csv_lock = threading.Lock()
+
+# ── Shared LLM instance (lazy - only used by email generation tools) ----------
 
 def _get_llm() -> ChatGroq:
     """Return a ChatGroq instance configured from src/config.py."""
@@ -243,16 +249,15 @@ def update_invoice_record(invoice_no: str) -> str:
 
     Returns a JSON confirmation object.
     """
-    df = load_invoices(config.DATA_PATH)
-
-    try:
-        df = update_followup(invoice_no, df)
-    except ValueError as exc:
-        result = {"status": "error", "invoice_no": invoice_no, "reason": str(exc)}
-        logger.log_action(invoice_no, "record_updated", "error", str(exc))
-        return json.dumps(result)
-
-    save_invoices(df, config.DATA_PATH)
+    with _csv_lock:   # serialise CSV writes — safe when agent batches tool calls
+        df = load_invoices(config.DATA_PATH)
+        try:
+            df = update_followup(invoice_no, df)
+        except ValueError as exc:
+            result = {"status": "error", "invoice_no": invoice_no, "reason": str(exc)}
+            logger.log_action(invoice_no, "record_updated", "error", str(exc))
+            return json.dumps(result)
+        save_invoices(df, config.DATA_PATH)
 
     logger.log_action(
         invoice_no=invoice_no,
@@ -296,15 +301,106 @@ def generate_run_report(query: str = "") -> str:
     return json.dumps(summary, indent=2)
 
 
+# -----------------------------------------------------------------------------
+# Tool 7 — process_invoice  (PRIMARY TOOL — use this for every invoice)
+# -----------------------------------------------------------------------------
+
+@tool
+def process_invoice(invoice_no: str) -> str:
+    """
+    Process one invoice end-to-end in a single, sequential tool call:
+      1. Fetch invoice details and determine urgency tier.
+      2. Generate a personalised follow-up email via the LLM.
+      3. Send the email (dry-run or real SMTP, depending on DRY_RUN setting).
+      4. Update the invoice record (increment followup_count, set last_followup_date).
+
+    THIS is the tool to use for every invoice. Do NOT call generate_followup_email,
+    send_email, and update_invoice_record separately — they will execute in parallel
+    and produce incorrect results.
+
+    Args:
+        invoice_no: The invoice identifier, e.g. "INV-1088".
+
+    Returns a JSON object summarising the outcome of all four steps.
+    """
+    # Step 1 — load invoice details
+    raw = json.loads(get_invoice_details.invoke(invoice_no))
+    if "error" in raw:
+        logger.log_action(invoice_no, "process_invoice", "error", raw["error"])
+        return json.dumps({"status": "error", "invoice_no": invoice_no, "reason": raw["error"]})
+
+    urgency_tier: str = raw.get("urgency_tier", "first_followup")
+    to_email: str = raw.get("contact_email", "")
+
+    # Guard: n/a means the invoice is paid or not yet actionable
+    if urgency_tier == "n/a":
+        msg = f"Invoice {invoice_no} is not actionable (status: {raw.get('payment_status', 'unknown')})."
+        logger.log_action(invoice_no, "process_invoice", "skipped", msg)
+        return json.dumps({"status": "skipped", "invoice_no": invoice_no, "reason": msg})
+
+    # Step 2 — generate email via LLM (sequential — result used in step 3)
+    prompt = get_prompt_for_tier(urgency_tier)
+    messages = prompt.format_messages(
+        client_name=raw.get("client_name", ""),
+        invoice_no=raw.get("invoice_no", ""),
+        invoice_amount=raw.get("invoice_amount", ""),
+        due_date=str(raw.get("due_date", ""))[:10],
+        days_overdue=raw.get("days_overdue", 0),
+        followup_count=raw.get("followup_count", 0),
+        format_instruction=(
+            "\nRespond with ONLY the email in this exact format:\n"
+            "Subject: <subject line>\n\nBody:\n<email body>"
+        ),
+    )
+    llm = _get_llm()
+    response = llm.invoke(messages)
+    subject, body = _parse_email_output(response.content.strip())
+
+    logger.log_action(invoice_no, "email_generated", "ok", f"Tier: {urgency_tier}. Subject: {subject}")
+
+    # Step 3 — send (uses the actual LLM-generated content)
+    send_result = emailer_module.send_email(to=to_email, subject=subject, body=body)
+    logger.log_action(
+        invoice_no=invoice_no,
+        action="email_sent",
+        result=send_result.get("status", "unknown"),
+        reason=f"to={to_email} | status={send_result.get('status')}",
+    )
+
+    # Step 4 — update CSV record (lock prevents concurrent write corruption)
+    with _csv_lock:
+        df = load_invoices(config.DATA_PATH)
+        try:
+            df = update_followup(invoice_no, df)
+            save_invoices(df, config.DATA_PATH)
+            update_status = "ok"
+        except ValueError as exc:
+            update_status = str(exc)
+
+    logger.log_action(invoice_no, "record_updated", update_status,
+                      "followup_count incremented; last_followup_date set to today.")
+
+    return json.dumps({
+        "invoice_no": invoice_no,
+        "urgency_tier": urgency_tier,
+        "email_subject": subject,
+        "to_email": to_email,
+        "send_status": send_result.get("status"),
+        "record_update": update_status,
+    })
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Exported list — pass this directly to the LangChain agent
 # ─────────────────────────────────────────────────────────────────────────────
 
 ALL_TOOLS = [
     get_pending_invoices,
+    process_invoice,          # PRIMARY — agent uses this for every invoice
+    generate_run_report,
+    # standalone tools kept for testing / direct use
     get_invoice_details,
     generate_followup_email,
     send_email,
     update_invoice_record,
-    generate_run_report,
 ]

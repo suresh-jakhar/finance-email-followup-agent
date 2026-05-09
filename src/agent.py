@@ -1,40 +1,50 @@
 """
 src/agent.py
 
-LangChain/LangGraph agent that autonomously orchestrates the full credit
-follow-up workflow: triage invoices -> generate emails -> send (or dry-run)
--> update records -> produce a final run report.
+Orchestrates the full credit follow-up pipeline:
+  triage -> generate emails (LLM) -> send -> update records -> report.
 
-Uses langgraph.prebuilt.create_react_agent — the current recommended pattern
-for LangChain >= 1.0 where AgentExecutor has been removed.
+Architecture: Python-driven loop (not an LLM-driven ReAct loop).
+The LLM is used only where it adds value — email generation inside
+process_invoice. The outer orchestration loop is deterministic Python,
+which avoids context-window bloat on services with tight token limits.
+
+The LangGraph ReAct agent (_build_agent) is kept for reference and can
+be used if a larger-context model is available.
 """
+
+import json
 
 from langchain_core.messages import HumanMessage
 from langchain_groq import ChatGroq
 from langgraph.prebuilt import create_react_agent
 
 from src import config, logger
-from src.tools import ALL_TOOLS
+from src.tools import ALL_TOOLS, get_pending_invoices, process_invoice, generate_run_report
 
-# ── System prompt — the agent's standing instructions ────────────────────────
+# ── System prompt (used by _build_agent / full-LLM mode) ─────────────────────
 
 _AGENT_SYSTEM_PROMPT = """You are an autonomous finance credit follow-up agent for a company.
 
-Your job is to:
-1. Retrieve all pending invoices that need follow-up.
-2. For each invoice, generate a personalized follow-up email appropriate to the urgency.
-3. Send each email (or log it in dry-run mode).
-4. Update the invoice record after each successful send.
-5. Generate a final run report summarizing all actions taken.
+Your workflow has exactly three phases:
 
-Work through the invoice list one by one. Do not skip any invoice that needs follow-up.
-Always update the record after sending. Always generate the final report at the end.
+PHASE 1 - Get the invoice list:
+  Call get_pending_invoices once. This returns the full list of invoices needing follow-up.
 
-Important rules:
-- Call get_pending_invoices first to see the full list.
-- For each invoice in the list: call generate_followup_email, then send_email, then update_invoice_record.
-- After ALL invoices are processed, call generate_run_report exactly once.
-- Never invent invoice data — always use the data returned by the tools.
+PHASE 2 - Process each invoice one at a time:
+  For EACH invoice_no in the list, call process_invoice(invoice_no).
+  - process_invoice handles email generation, sending, and record update internally.
+  - Do NOT call generate_followup_email, send_email, or update_invoice_record separately.
+  - Do NOT call get_pending_invoices again after phase 1.
+  - Process invoices one at a time, in order.
+
+PHASE 3 - Final report:
+  After ALL invoices have been processed, call generate_run_report once.
+
+CRITICAL RULES:
+- Use process_invoice for every invoice — never the three individual tools.
+- Do not skip any invoice from the list.
+- Do not call generate_run_report until every invoice has been processed.
 """
 
 
@@ -42,19 +52,15 @@ def _build_agent(verbose: bool = True):
     """
     Construct and return the LangGraph ReAct agent with all tools attached.
 
-    Args:
-        verbose: Unused in LangGraph (streaming controls visibility instead),
-                 kept for API compatibility with callers.
-
-    Returns:
-        A compiled LangGraph agent graph ready to invoke.
+    Note: Requires a model with a large context window (>= 8k tokens)
+    to handle the full 85-invoice payload without hitting rate limits.
     """
     llm = ChatGroq(
         model=config.LLM_MODEL,
         api_key=config.GROQ_API_KEY,
-        temperature=0,      # deterministic — no creative latitude for finance ops
+        temperature=0,
+        max_tokens=512,
     )
-
     return create_react_agent(
         model=llm,
         tools=ALL_TOOLS,
@@ -64,40 +70,47 @@ def _build_agent(verbose: bool = True):
 
 def run_agent(verbose: bool = True) -> dict:
     """
-    Reset the logger, build the agent, run it to completion, and return
-    the final run report summary dict.
+    Orchestrate the full follow-up pipeline and return the run summary.
 
-    The agent streams its reasoning steps; each step is printed when
-    verbose=True, giving full transparency into the tool-call chain.
+    Uses a Python-driven sequential loop rather than an LLM ReAct loop.
+    This avoids context-window accumulation when processing large invoice
+    datasets on free-tier LLM APIs (e.g. Groq's 6k-token limit).
+
+    The LLM is still called for every invoice — inside process_invoice —
+    to generate a personalised email. Only the outer loop is Python.
 
     Args:
-        verbose: If True, prints each reasoning step to stdout.
+        verbose: If True, prints progress for each invoice.
 
     Returns:
         dict with keys: total_processed, total_sent, total_skipped,
         total_errors, log, report_file.
     """
-    # Clear any stale log entries from a previous run in the same process
+    # Clear stale log entries from any previous run in this process
     logger.reset()
 
-    agent = _build_agent(verbose=verbose)
+    # ── Phase 1: retrieve the triaged invoice list ───────────────────────────
+    invoices = json.loads(get_pending_invoices.invoke(""))
+    total = len(invoices)
+    if verbose:
+        print(f"\n[AGENT] {total} invoices to process.\n")
 
-    user_message = (
-        "Process all pending invoices. "
-        "For each one: generate a follow-up email, send it, and update the record. "
-        "When all invoices are done, generate the final run report."
-    )
+    # ── Phase 2: process each invoice sequentially ───────────────────────────
+    for i, inv in enumerate(invoices, 1):
+        inv_no = inv["invoice_no"]
+        tier   = inv.get("urgency_tier", "?")
 
-    # Stream the agent's reasoning steps for full visibility
-    for step in agent.stream(
-        {"messages": [HumanMessage(content=user_message)]},
-        stream_mode="values",
-    ):
-        last_msg = step["messages"][-1]
         if verbose:
-            last_msg.pretty_print()
+            print(f"[AGENT] ({i}/{total}) {inv_no}  tier={tier}")
 
-    # Flush the structured report to disk and return the summary
+        result = json.loads(process_invoice.invoke(inv_no))
+
+        if verbose:
+            status = result.get("send_status") or result.get("status", "?")
+            subj   = result.get("email_subject", "")[:60]
+            print(f"         -> {status}  |  {subj}")
+
+    # ── Phase 3: flush the report ────────────────────────────────────────────
     report_path = logger.flush_report(config.OUTPUT_DIR)
     summary = logger.get_summary()
     summary["report_file"] = report_path
