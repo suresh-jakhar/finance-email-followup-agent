@@ -18,11 +18,19 @@ from src.triage import (
 # ── Shared agent persona ──────────────────────────────────────────────────────
 
 _SYSTEM_PERSONA = (
-    "You are a professional credit collections specialist. Your goal is to "
-    "maintain professional communication while following a strict escalation "
-    "ladder to reduce DSO (Days Sales Outstanding). You must vary your tone "
-    "and urgency exactly as instructed."
+    "You are a Senior Accounts Receivable Manager specializing in strategic debt recovery. "
+    "Your communication style is surgical: precise, professional, and authoritative, yet "
+    "carefully calibrated to preserve the long-term commercial relationship. "
+    "\n\nGUIDELINES:"
+    "\n- PRECISION: Use exact data (dates, amounts) to create accountability."
+    "\n- SCANNABILITY: Keep paragraphs short and the 'Call to Action' unmistakable."
+    "\n- BREVITY: Avoid filler. Every sentence must serve the goal of securing payment."
+    "\n- SIGNATURE: Consistently sign off as {sender_name}."
+    "\n\nSTRICT VOCABULARY RULES:"
+    "\n- BAN: Do NOT use the word 'outstanding' or the phrase 'slipped through the cracks'."
+    "\n- MANDATORY ALTERNATIVES: Use ONLY 'pending invoice', 'unpaid invoice', 'payment due', or 'open invoice'."
 )
+
 
 _FORMAT_INSTRUCTION = """
 Respond with ONLY the email in this exact format:
@@ -41,18 +49,19 @@ Body:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _WARM_HUMAN = """
-Write a WARM and FRIENDLY payment reminder email.
-Assume the client simply overlooked the invoice (gentle reminder).
+Write a professional and concise payment reminder.
+Assume a simple oversight and maintain a helpful tone.
 
 Invoice Details:
 - Client: {client_name}
 - Invoice No: {invoice_no}
 - Amount: ${invoice_amount}
 - Due Date: {due_date}
-- Days Overdue: {days_overdue}
 
-Mandatory Tone: Warm & Friendly.
-Mandatory CTA: Include a link to pay now or provide bank details for immediate transfer.
+Tone: Helpful & Professional.
+Instructions: Do NOT use 'outstanding'. Mention that payment is now overdue.
+CTA: Provide the Payment Link: {payment_link} and Bank Details: {bank_details}.
+Sign off as: {sender_name}
 {format_instruction}
 """
 
@@ -69,18 +78,19 @@ PROMPT_WARM = ChatPromptTemplate.from_messages([
 # ─────────────────────────────────────────────────────────────────────────────
 
 _FIRM_HUMAN = """
-Write a POLITE BUT FIRM follow-up email.
-State that the payment is still pending and we require confirmation.
+Write a firm and direct follow-up email.
+State that the payment remains unsettled and we require a confirmed payment date.
 
 Invoice Details:
 - Client: {client_name}
 - Invoice No: {invoice_no}
 - Amount: ${invoice_amount}
 - Due Date: {due_date}
-- Days Overdue: {days_overdue}
 
-Mandatory Tone: Polite but Firm.
-Mandatory CTA: Ask the client to provide a confirmed payment date.
+Tone: Firm & Direct.
+Instructions: Do NOT use 'outstanding'.
+CTA: Ask for a confirmed payment date. Remind them they can pay at {payment_link}.
+Sign off as: {sender_name}
 {format_instruction}
 """
 
@@ -97,18 +107,19 @@ PROMPT_FIRM = ChatPromptTemplate.from_messages([
 # ─────────────────────────────────────────────────────────────────────────────
 
 _SERIOUS_HUMAN = """
-Write a FORMAL and SERIOUS follow-up email.
-Mention our escalating concern and that continued non-payment may impact their credit terms.
+Write a formal and serious notification.
+Express concern regarding the unresolved balance and the potential impact on their credit terms.
 
 Invoice Details:
 - Client: {client_name}
 - Invoice No: {invoice_no}
 - Amount: ${invoice_amount}
-- Due Date: {due_date}
 - Days Overdue: {days_overdue}
 
-Mandatory Tone: Formal & Serious.
-Mandatory CTA: Request a response within the next 48 hours.
+Tone: Formal & Serious.
+Instructions: Do NOT use 'outstanding'.
+CTA: Demand a response within 48 hours. Provide payment link {payment_link} and bank details {bank_details}.
+Sign off as: {sender_name}
 {format_instruction}
 """
 
@@ -125,18 +136,18 @@ PROMPT_SERIOUS = ChatPromptTemplate.from_messages([
 # ─────────────────────────────────────────────────────────────────────────────
 
 _STERN_HUMAN = """
-Write a STERN and URGENT final reminder email.
-This is the last warning before the account is referred to our legal/recovery team.
+Write a stern final warning.
+This is the last notice before the account is referred to legal/debt recovery.
 
 Invoice Details:
 - Client: {client_name}
 - Invoice No: {invoice_no}
 - Amount: ${invoice_amount}
-- Due Date: {due_date}
-- Days Overdue: {days_overdue}
 
-Mandatory Tone: Stern & Urgent.
-Mandatory CTA: Demand payment immediately or instruct them to call our office right away.
+Tone: Stern & Urgent.
+Instructions: Do NOT use 'outstanding'.
+CTA: Demand immediate payment via {payment_link}.
+Sign off as: {sender_name}
 {format_instruction}
 """
 

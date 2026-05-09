@@ -148,6 +148,9 @@ def generate_followup_email(invoice_no: str) -> str:
         due_date=str(raw.get("due_date", ""))[:10],
         days_overdue=raw.get("days_overdue", 0),
         followup_count=raw.get("followup_count", 0),
+        sender_name=config.SMTP_SENDER_NAME,
+        payment_link=config.PAYMENT_LINK,
+        bank_details=config.BANK_DETAILS,
         format_instruction=(
             "\nRespond with ONLY the email in this exact format — no extra commentary:\n"
             "\nSubject: <subject line>\n\nBody:\n<email body>"
@@ -180,23 +183,29 @@ def generate_followup_email(invoice_no: str) -> str:
 def _parse_email_output(raw_text: str) -> tuple[str, str]:
     """
     Extract subject and body from the LLM's formatted output.
-
-    Expected format:
-        Subject: <line>
-
-        Body:
-        <rest of text>
+    Handles variations like 'Subject: ' and 'Body:' markers.
     """
     subject = ""
-    body = raw_text
-
-    lines = raw_text.splitlines()
-    for i, line in enumerate(lines):
-        if line.lower().startswith("subject:"):
+    body = ""
+    
+    # Try to find Subject
+    for line in raw_text.splitlines():
+        if line.lower().strip().startswith("subject:"):
             subject = line[len("subject:"):].strip()
-        if line.lower().strip() == "body:":
-            body = "\n".join(lines[i + 1:]).strip()
             break
+            
+    # Try to find Body (everything after the Body: marker)
+    lower_text = raw_text.lower()
+    marker = "body:"
+    if marker in lower_text:
+        marker_pos = lower_text.find(marker)
+        body = raw_text[marker_pos + len(marker):].strip()
+    else:
+        # Fallback: if no marker, take everything after the subject line or the whole thing
+        if subject and subject in raw_text:
+            body = raw_text[raw_text.find(subject) + len(subject):].strip()
+        else:
+            body = raw_text
 
     return subject, body
 
@@ -358,6 +367,9 @@ def process_invoice(invoice_no: str) -> str:
         due_date=str(raw.get("due_date", ""))[:10],
         days_overdue=raw.get("days_overdue", 0),
         followup_count=raw.get("followup_count", 0),
+        sender_name=config.SMTP_SENDER_NAME,
+        payment_link=config.PAYMENT_LINK,
+        bank_details=config.BANK_DETAILS,
         format_instruction=(
             "\nRespond with ONLY the email in this exact format:\n"
             "Subject: <subject line>\n\nBody:\n<email body>"

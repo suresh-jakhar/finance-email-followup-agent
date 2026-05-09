@@ -27,7 +27,9 @@ SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER: str = os.getenv("SMTP_USER", "")
 SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
 SMTP_SENDER_NAME: str = os.getenv("SMTP_SENDER_NAME", "Finance Department")
-
+PAYMENT_LINK: str = os.getenv("PAYMENT_LINK", "https://payments.example.com/portal")
+BANK_DETAILS: str = os.getenv("BANK_DETAILS", "IBAN: GB00 0000 0000 0000 | SWIFT: EXAMPLEX")
+                    
 # ── Run mode ─────────────────────────────────────────────────────────────────
 # DRY_RUN=true  → emails are printed/logged only, never sent via SMTP
 DRY_RUN: bool = os.getenv("DRY_RUN", "true").strip().lower() == "true"
