@@ -1,131 +1,76 @@
-# Finance Credit Follow-Up Email Agent
+# Agent Email Followup Finance
 
-An autonomous AI agent designed to streamline accounts receivable operations. This system ingests outstanding invoice data, determines the appropriate escalation tier based on payment delinquency, uses an LLM (Groq LLaMA 3.1) to draft highly personalized follow-up emails, dispatches them via SMTP, and automatically updates tracking records.
+Chasing unpaid invoices is a repetitive manual task that consumes hours of finance teams’ time. I built this autonomous agent to manage the entire “accounts receivable” process, from triaging overdue payments, to writing personalized, context-aware emails, to updating the ledger.
 
-Built for finance teams, this agent replaces manual email chasing with a deterministic, fully automated workflow that preserves a professional tone while strictly adhering to financial escalation protocols.
 
-## ⚙️ Architecture Workflow
+# The How It Works (The Logic)
+
+It follows a **5-Stage Tone Escalation Matrix** I created to balance professional courtesy and firm collection tactics.
 
 ```mermaid
 graph TD
-    A[Dataset<br>CSV] -->|Load & Parse| B(Triage Logic)
-    B -->|Calculate days overdue| C{Assign Urgency Tier}
+    A[Data_Ingestion.csv] -->|Load| B(Triage Engine)
+    B -->|Calculate Days Overdue| C{Urgency Tier}
     
-    C -->|0 days| D[Reminder]
-    C -->|1-15 days| E[1st Follow-up]
-    C -->|16-30 days| F[2nd Follow-up]
-    C -->|31-60 days| G[Escalation]
-    C -->|60+ days| H[Final Notice]
+    C -->|1-7 Days| D[Stage 1: Warm Reminder]
+    C -->|8-14 Days| E[Stage 2: Firm Follow-up]
+    C -->|15-21 Days| F[Stage 3: Serious Notice]
+    C -->|22-30 Days| G[Stage 4: Stern Warning]
+    C -->|>30 Days| H[Stage 5: Legal Stop]
     
-    D & E & F & G & H --> I[Groq LLaMA 3.1 8B<br>Email Generation]
+    D & E & F & G --> I[Security Sanitization]
+    I --> J[Groq LLaMA 3.1 8B Generation]
+    J --> K[Output Validator]
+    K --> L{Live or Dry Run?}
     
-    I -->|Draft Email| J{Dry Run Enabled?}
-    J -->|Yes| K[Log to Console]
-    J -->|No| L[SMTP Dispatch]
+    L -->|Live| M[SMTP Dispatch]
+    L -->|Dry Run| N[Local File Log]
     
-    K & L --> M[Update CSV<br>followup_count++]
-    M --> N[Write Run Report JSON]
+    M & N --> O[Update CSV Ledger]
+    H -->|Halt| P[Manual Finance Review]
 ```
 
-## 🚀 Quickstart
+## 🛠️ Tech Stack & Rationale
 
-**1. Clone the repository**
-```bash
-git clone https://github.com/suresh-jakhar/Finance-Credit-Follow-Up-Email-Agent.git
-cd Finance-Credit-Follow-Up-Email-Agent
-```
+- **LLM: Groq (LLaMA 3.1 8B)**:picked Groq for its fast inference speeds and generous free-tier credits, allowing for rapid testing and iteration while still delivering solid reasoning quality for writing professional emails.
+- **Orchestration: LangChain & LangGraph**: I leveraged LangGraph to orchestrate stateful workflows and run tools agent-like. I built a lightweight custom Python control loop for the final production workflow, to better handle token usage under Groq’s free-tier limits, while preserving tool-calling and iterative agent behavior.
+- **Frontend: Streamlit**: I built a simple monitoring dashboard, so finance managers can get a bird's eye view of the aging pipeline without having to directly interact with the underlying code.
 
-**2. Setup Virtual Environment & Install Dependencies**
+## 🛡️ Security Risk Mitigation
+
+Since this agent handles sensitive client data and dispatches real emails, I implemented several defensive layers:
+
+| Risk | Mitigation Strategy |
+| :--- | :--- |
+| **Prompt Injection** | I built a **Sanitization Layer** that scrubs malicious patterns (like "Ignore previous instructions") from the CSV data before it ever reaches the prompt. |
+| **Data Privacy (PII)** | The logging system uses a custom **PII Masking** utility. Email addresses are redacted (e.g., `s***@gmail.com`) in all audit logs to protect client privacy. |
+| **Hallucination** | Every LLM-generated email passes through a **Structure Validator**. If the AI hallucinates a wrong amount or a broken link, the system halts the send and logs a security error. |
+| **Human-in-the-Loop** | I implemented a **Hard Stop at Stage 5**. Once an invoice is >30 days overdue, the agent is forbidden from auto-sending; it requires a manual override by the Finance Team. |
+
+## 🚀 Setup Instructions
+
+**1. Environment Setup**
 ```bash
+# Create and activate virtual environment
 python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-**3. Configure Environment Variables**
-Copy the sample config and add your keys:
+**2. Configuration**
+Create a `.env` file based on `.env.example`:
+```DRY_RUN=true  # Set to false for live dispatch
+```
+
+**3. Run the System**
 ```bash
-cp .env.example .env
-```
-Ensure your `.env` contains your Groq API key:
-```env
-GROQ_API_KEY=gsk_your_key_here
-LLM_MODEL=llama-3.1-8b-instant
-DRY_RUN=True
-```
-*(Optional)* Add SMTP credentials to `.env` if you plan to use live email dispatch.
+# Start the Agent
+python main.py
 
-**4. Run the Agent**
-```bash
-# Safe mode (simulates email sending)
-python main.py --dry-run
-
-# Live mode (sends real emails via SMTP)
-python main.py --send
+# Launch the Monitoring Dashboard
+streamlit run dashboard.py
 ```
 
-## 📊 Dataset Schema
-
-The agent expects a CSV file (`Dataset/Data_Ingestion.csv`) with the following structure:
-
-| Column Name | Type | Description |
-|---|---|---|
-| `invoice_no` | String | Unique identifier (e.g., INV-1001) |
-| `client_name` | String | Name of the client |
-| `contact_email` | String | Recipient email address |
-| `invoice_amount` | Float | Outstanding balance |
-| `due_date` | Date (YYYY-MM-DD) | Original due date |
-| `payment_status` | String | "Pending" or "Paid" (Agent ignores "Paid") |
-| `days_overdue` | Integer | Dynamically recalculated at runtime |
-| `followup_count` | Integer | Times client has been emailed |
-| `last_followup_date` | Date (YYYY-MM-DD) | Date of last dispatched email |
-
-## 📈 Escalation Logic
-
-The agent assigns an urgency tier based on a combination of `days_overdue` and `followup_count`. This dictates the prompt context sent to the LLM.
-
-| Tier | Condition | Tone / Action |
-|---|---|---|
-| **Reminder** | 0 days overdue | Polite, helpful reminder |
-| **First Follow-up** | 1-15 days or 1st attempt | Direct, assuming oversight |
-| **Second Follow-up** | 16-30 days or 2nd attempt | Firmer, requesting ETA |
-| **Escalation** | 31-60 days or 3rd/4th attempt | Stern, warning of credit impact |
-| **Final Notice** | 60+ days or 5th attempt | Ultimatum, threat of legal/collections |
-
-## 📝 Sample Output
-
-The agent produces a detailed JSON summary report in the `outputs/` directory after every run:
-
-```json
-{
-  "total_processed": 85,
-  "total_sent": 85,
-  "total_skipped": 0,
-  "total_errors": 0,
-  "report_file": "outputs/run_report_20260509T081436Z.json",
-  "log": [
-    {
-      "timestamp": "2026-05-09T08:06:50.123456",
-      "invoice_no": "INV-1088",
-      "action": "email_generated",
-      "result": "ok",
-      "reason": "Tier: final_notice. Subject: Final Notice: Overdue Invoice INV-1088"
-    },
-    {
-      "timestamp": "2026-05-09T08:06:50.234567",
-      "invoice_no": "INV-1088",
-      "action": "email_sent",
-      "result": "dry_run",
-      "reason": "to=billing@starkindustries.com | status=dry_run"
-    }
-  ]
-}
-```
-
-## 🛠️ Tech Stack
-
-- **Language:** Python 3.12
-- **Agent Orchestration:** LangChain / custom deterministic pipeline
-- **LLM Engine:** Groq API (`llama-3.1-8b-instant`) via `langchain-groq`
-- **Data Handling:** `pandas`
-- **Email:** Native Python `smtplib` / `email.mime`
+---

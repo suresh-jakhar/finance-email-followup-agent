@@ -2,7 +2,8 @@
 prompts/email_prompt.py
 
 LangChain ChatPromptTemplate definitions for each urgency tier.
-Strictly aligned with the Mandatory Tone Escalation Matrix.
+Aligned with the Tone Escalation Matrix.
+
 """
 
 from langchain_core.prompts import ChatPromptTemplate
@@ -15,7 +16,6 @@ from src.triage import (
     TIER_LEGAL,
 )
 
-# ── Shared agent persona ──────────────────────────────────────────────────────
 
 _SYSTEM_PERSONA = (
     "You are a Senior Accounts Receivable Manager specializing in strategic debt recovery. "
@@ -59,7 +59,7 @@ Invoice Details:
 - Due Date: {due_date}
 
 Tone: Helpful & Professional.
-Instructions: Do NOT use 'outstanding'. Mention that payment is now overdue.
+Instructions: Mention that payment is now overdue.
 CTA: Provide the Payment Link: {payment_link} and Bank Details: {bank_details}.
 Sign off as: {sender_name}
 {format_instruction}
@@ -88,7 +88,7 @@ Invoice Details:
 - Due Date: {due_date}
 
 Tone: Firm & Direct.
-Instructions: Do NOT use 'outstanding'.
+Instructions: Mention that payment is now overdue.
 CTA: Ask for a confirmed payment date. Remind them they can pay at {payment_link}.
 Sign off as: {sender_name}
 {format_instruction}
@@ -117,7 +117,6 @@ Invoice Details:
 - Days Overdue: {days_overdue}
 
 Tone: Formal & Serious.
-Instructions: Do NOT use 'outstanding'.
 CTA: Demand a response within 48 hours. Provide payment link {payment_link} and bank details {bank_details}.
 Sign off as: {sender_name}
 {format_instruction}
@@ -145,7 +144,6 @@ Invoice Details:
 - Amount: ${invoice_amount}
 
 Tone: Stern & Urgent.
-Instructions: Do NOT use 'outstanding'.
 CTA: Demand immediate payment via {payment_link}.
 Sign off as: {sender_name}
 {format_instruction}
