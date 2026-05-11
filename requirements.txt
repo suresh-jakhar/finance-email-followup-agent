@@ -8,3 +8,5 @@ pandas
 python-dotenv
 streamlit
 plotly
+apscheduler
+pytz

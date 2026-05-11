@@ -1,17 +1,26 @@
+import os
+import logging
+import warnings
+
+os.environ["PYTHONWARNINGS"] = "ignore"
+warnings.filterwarnings("ignore")
+logging.captureWarnings(True)
+logging.getLogger("py.warnings").setLevel(logging.CRITICAL)
+
 """
 main.py
 
 Entry point for the Finance Credit Follow-Up Email Agent.
 
 Usage:
-    python main.py            # respects DRY_RUN value from .env
-    python main.py --dry-run  # forces safe mode (no real emails sent)
-    python main.py --send     # forces live mode (real SMTP emails)
+    python main.py            # Starts the background scheduler (default)
+    python main.py --now      # Runs one sweep immediately
+    python main.py --dry-run  # Forces safe mode for the run/scheduler
+    python main.py --send     # Forces live mode for the run/scheduler
 """
 
 import argparse
 import sys
-
 from src import config
 
 
@@ -42,6 +51,11 @@ def _parse_args() -> argparse.Namespace:
         "--send",
         action="store_true",
         help="Override .env — force live mode (real emails via SMTP)",
+    )
+    parser.add_argument(
+        "--now",
+        action="store_true",
+        help="Run one sweep immediately instead of starting the scheduler",
     )
     return parser.parse_args()
 
@@ -78,18 +92,20 @@ def main() -> int:
     """
     args = _parse_args()
 
-    # 1. Apply CLI mode overrides before importing the agent
     if args.dry_run:
         config.DRY_RUN = True
     elif args.send:
         config.DRY_RUN = False
 
-    # 2. Print run mode banner so the user always knows what mode they're in
+    if not args.now:
+        from src.scheduler import start_scheduler
+        start_scheduler()
+        return 0
+
     _print_banner(config.DRY_RUN)
 
-    # 3. Run the agent
     try:
-        from src.agent import run_agent   # deferred import — respects patched config.DRY_RUN
+        from src.agent import run_agent  
         summary = run_agent(limit=args.limit, verbose=True)
     except KeyboardInterrupt:
         print("\n[INTERRUPTED] Run cancelled by user.")
@@ -98,10 +114,8 @@ def main() -> int:
         print(f"\n[ERROR] Unhandled exception: {exc}")
         return 1
 
-    # 4. Print the final summary
     _print_summary(summary)
 
-    # 5. Exit 0 on success
     return 0
 
 

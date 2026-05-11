@@ -34,6 +34,18 @@ BANK_DETAILS: str = os.getenv("BANK_DETAILS", "IBAN: GB00 0000 0000 0000 | SWIFT
 # DRY_RUN=true  → emails are printed/logged only, never sent via SMTP
 DRY_RUN: bool = os.getenv("DRY_RUN", "true").strip().lower() == "true"
 
+# Automated Scheduling
+_raw_time = os.getenv("SCHEDULE_HOUR", "9:00")
+if ":" in _raw_time:
+    _parts = _raw_time.split(":")
+    SCHEDULE_HOUR: int = int(_parts[0])
+    SCHEDULE_MINUTE: int = int(_parts[1])
+else:
+    SCHEDULE_HOUR: int = int(_raw_time)
+    SCHEDULE_MINUTE: int = 0
+
+TIMEZONE: str = os.getenv("TIMEZONE", "Asia/Kolkata")
+
 # ── Paths ────────────────────────────────────────────────────────────────────
 DATA_PATH: str = str(BASE_DIR / "Dataset" / "Data_Ingestion.csv")
 OUTPUT_DIR: str = str(BASE_DIR / "outputs")
