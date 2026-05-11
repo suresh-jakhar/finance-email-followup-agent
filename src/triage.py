@@ -1,18 +1,7 @@
-"""
-src/triage.py
-
-Filters and classifies pending invoices that need a follow-up email.
-Assigns each an urgency_tier based on the escalation ladder defined
-in the implementation plan.
-
-Zero LLM dependency — pure Python / pandas logic.
-"""
-
 import pandas as pd
 from datetime import date
 
 
-# Urgency tier labels — strictly aligned with the Tone Escalation Matrix.
 TIER_WARM = "stage_1_warm"              # 1-7 days
 TIER_FIRM = "stage_2_firm"              # 8-14 days
 TIER_SERIOUS = "stage_3_serious"        # 15-21 days
@@ -49,7 +38,6 @@ def _assign_tier(row: pd.Series) -> str:
         return TIER_FIRM
 
     # Default to warm if it's anywhere from 1 to 7 days
-    # (or 0 if it's the exact due date, assuming oversight)
     return TIER_WARM
 
 
@@ -73,20 +61,20 @@ def triage_invoices(df: pd.DataFrame) -> pd.DataFrame:
     """
     result = df.copy()
 
-    # Step 1 — Keep only unpaid invoices (Pending, Overdue, Critical, etc.)
+    # Keep only unpaid invoices (Pending, Overdue, Critical, etc.)
     result = result[result["payment_status"] != "Paid"]
 
-    # Step 2 — Exclude invoices that aren't yet actionable:
+    #  Exclude invoices that aren't yet actionable:
     #   not overdue (days_overdue == 0) AND due date is more than 7 days out
     today = pd.Timestamp(date.today())
     days_until_due = (result["due_date"] - today).dt.days
     not_yet_actionable = (result["days_overdue"] == 0) & (days_until_due > 7)
     result = result[~not_yet_actionable]
 
-    # Step 3 — Assign urgency tier row-by-row
+    # Assign urgency tier row-by-row
     result["urgency_tier"] = result.apply(_assign_tier, axis=1)
 
-    # Step 4 — Sort: most overdue first, largest invoice as tiebreaker
+    # Sort: most overdue first, largest invoice as tiebreaker
     result = result.sort_values(
         by=["days_overdue", "invoice_amount"],
         ascending=[False, False],

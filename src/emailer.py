@@ -1,11 +1,3 @@
-"""
-src/emailer.py
-
-Isolated email sender with dry-run support.
-Never let an SMTP failure crash the agent — all exceptions are caught
-and returned as an error dict.
-"""
-
 import smtplib
 from datetime import datetime, timezone
 from email.mime.text import MIMEText

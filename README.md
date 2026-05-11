@@ -1,16 +1,16 @@
-# Agent Email Followup Finance
+# Enterprise Credit Collections Agent
 
 Chasing unpaid invoices is a repetitive manual task that consumes hours of finance teams’ time. I built this autonomous agent to manage the entire “accounts receivable” process, from triaging overdue payments, to writing personalized, context-aware emails, to updating the ledger.
 
+## Workflow
 
-# The How It Works (The Logic)
+It follows a 5-Stage Tone Escalation Matrix I created to balance professional courtesy and firm collection tactics.
 
-It follows a **5-Stage Tone Escalation Matrix** I created to balance professional courtesy and firm collection tactics.
 
 ```mermaid
 graph TD
-    A[Data_Ingestion.csv] -->|Load| B(Triage Engine)
-    B -->|Calculate Days Overdue| C{Urgency Tier}
+    A[Data_Ingestion.csv] -->|24h Scheduler| B(Triage Engine)
+    B -->|Calculate Aging| C{Urgency Matrix}
     
     C -->|1-7 Days| D[Stage 1: Warm Reminder]
     C -->|8-14 Days| E[Stage 2: Firm Follow-up]
@@ -21,55 +21,52 @@ graph TD
     D & E & F & G --> I[Security Sanitization]
     I --> J[Groq LLaMA 3.1 8B Generation]
     J --> K[Output Validator]
-    K --> L{Live or Dry Run?}
     
-    L -->|Live| M[SMTP Dispatch]
-    L -->|Dry Run| N[Local File Log]
+    K --> L{Dispatch Mode}
+    L -->|Live SMTP| M[Recipient Inbox]
+    L -->|Dry Run| N[Local Audit Log]
     
-    M & N --> O[Update CSV Ledger]
+    M & N --> O[Auto-Update CSV Ledger]
     H -->|Halt| P[Manual Finance Review]
 ```
 
 ## Tech Stack & Rationale
 
 - **LLM: Groq (LLaMA 3.1 8B)**: picked Groq for its fast inference speeds and generous free-tier credits, allowing for rapid testing and iteration while still delivering solid reasoning quality for writing professional emails.
-- **Orchestration: LangChain & LangGraph**: I leveraged LangGraph to orchestrate stateful workflows and run tools agent-like. I built a lightweight custom Python control loop for the final production workflow, to better handle token usage under Groq’s free-tier limits, while preserving tool-calling and iterative agent behavior.
-- **Frontend: Streamlit**: I built a simple monitoring dashboard, so finance managers can get a bird's eye view of the aging pipeline without having to directly interact with the underlying code.
+- **Orchestration: LangChain & LangGraph**:
+    - **LangChain** provides the "Tools" (Emailing, CSV Loading) and Prompt Templates.
+    - **LangGraph** allows the agent to be "Stateful"—it remembers which stage of the run it is in and can recover from errors without losing progress.
+- **Automation: APScheduler**: Implemented as a background service with **Timezone Support (Asia/Kolkata)** and a live ticking countdown timer in the terminal.
+- **Logging**:  JSON log file 
+- **Monitoring: Streamlit**: View of the collection pipeline and aging reports.
 
-## Security Risk Mitigation
+## Security & Risk Mitigation
 
-Since this agent handles sensitive client data and dispatches real emails, I implemented several defensive layers:
 
-| Risk | Mitigation Strategy |
-| :--- | :--- |
-| **Prompt Injection** | I built a **Sanitization Layer** that scrubs malicious patterns (like "Ignore previous instructions") from the CSV data before it ever reaches the prompt. |
-| **Data Privacy (PII)** | The logging system uses a custom **PII Masking** utility. Email addresses are redacted (e.g., `s***@gmail.com`) in all audit logs to protect client privacy. |
-| **Hallucination** | Every LLM-generated email passes through a **Structure Validator**. If the AI hallucinates a wrong amount or a broken link, the system halts the send and logs a security error. |
-| **Human-in-the-Loop** | I implemented a **Hard Stop at Stage 5**. Once an invoice is >30 days overdue, the agent is forbidden from auto-sending; it requires a manual override by the Finance Team. |
+1.  **Prompt Injection Defense**: Every piece of CSV data is scrubbed through a **Sanitization Layer** before reaching the LLM to prevent "Ignore previous instructions" attacks.
+2.  **PII Data Privacy**: Audit logs use a custom **Redaction Utility** to mask email addresses (e.g., `s***@gmail.com`), ensuring PII is never stored in plain text on disk.
+3.  **Hallucination Guard**: A **Structure Validator** checks every LLM response. If the AI misses a subject line or messes up a payment link, the system halts the send and logs a validation error.
+4.  **Strategic Stop-Limit**: The agent is hard-coded to **Halt at Stage 5**. It is forbidden from auto-escalating to legal action without a human "Manual Override."
 
-## Setup Instructions
+## Future Scaling
 
-**1. Environment Setup**
-```bash
-# Create and activate virtual environment
-python -m venv .venv
-source .venv/bin/activate  
+- **FastAPI Integration**: I will wrap the agent in a REST API to allow ERP systems (SAP/QuickBooks) to trigger follow-ups via Webhooks.
+- **Redis Rate Limiting**: I will implement token-bucket limiting to prevent API abuse and manage LLM cost-efficiency.
+- **SQL Backend**: I will transition from CSV to a proper relational database (PostgreSQL) for handling thousands of concurrent invoices.
 
-# Install dependencies
-pip install -r requirements.txt
+## Setup & Usage
+
+**1. Configuration**
+Define your credentials and automation settings in `.env`:
+```ini
+SCHEDULE_HOUR=09:00     # Daily trigger time
+TIMEZONE=Asia/Kolkata   # Your local timezone
+DRY_RUN=true            # Set to false for live SMTP
 ```
 
-**2. Configuration**
-Create a `.env` file based on `.env.example`:
-
-
-**3. Run the System**
+**2. Launching the Agent**
 ```bash
-# Start the Agent
-python main.py
-
-# Launch the Monitoring Dashboard
-streamlit run dashboard.py
+python main.py          # Starts the 24h background scheduler
+python main.py --now    # Forces an immediate sweep
 ```
 
----

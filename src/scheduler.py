@@ -1,10 +1,3 @@
-"""
-src/scheduler.py
-
-Handles the automated background scheduling for the Finance Agent.
-Includes timezone support and a live countdown timer for the next run.
-"""
-
 import time
 import sys
 import logging
@@ -16,8 +9,6 @@ from apscheduler.triggers.cron import CronTrigger
 from src.agent import run_agent
 from src import config
 
-
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(name)s] %(levelname)s: %(message)s',

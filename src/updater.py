@@ -1,10 +1,3 @@
-"""
-src/updater.py
-
-In-memory CSV updater — increments followup_count and stamps last_followup_date
-for a single invoice. The caller is responsible for persisting via save_invoices().
-"""
-
 import pandas as pd
 from datetime import date
 

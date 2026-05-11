@@ -1,20 +1,3 @@
-"""
-src/tools.py
-
-LangChain tool definitions used by the agent during its reasoning loop.
-Each tool is decorated with @tool so LangChain can describe and call them
-automatically. All tools are importable and manually testable in isolation.
-
-Tool list (7 total):
-  1. get_pending_invoices    - returns triaged invoice summary
-  2. get_invoice_details     - returns full details for one invoice
-  3. process_invoice         - generate + send + update in one sequential call (PRIMARY)
-  4. generate_followup_email - calls LLM to draft a personalised email (standalone)
-  5. send_email              - sends or dry-runs a single email (standalone)
-  6. update_invoice_record   - increments followup_count and persists (standalone)
-  7. generate_run_report     - returns the structured run summary
-"""
-
 import re
 import json
 import threading
@@ -30,11 +13,9 @@ from src.updater import update_followup
 from src import emailer as emailer_module
 from prompts.email_prompt import get_prompt_for_tier
 
-# ── CSV write lock — prevents concurrent update_invoice_record calls from
-#    trampling each other when the agent batches tool calls in parallel.
+# CSV write lock — prevents concurrent update_invoice_record calls from
 _csv_lock = threading.Lock()
 
-# ── Shared LLM instance (lazy - only used by email generation tools) ----------
 
 def _get_llm() -> ChatGroq:
     """Return a ChatGroq instance configured from src/config.py."""
@@ -45,9 +26,7 @@ def _get_llm() -> ChatGroq:
     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Tool 1 — get_pending_invoices
-# ─────────────────────────────────────────────────────────────────────────────
+# Tool 1 : get_pending_invoices
 
 @tool
 def get_pending_invoices(query: str = "") -> str:
@@ -76,9 +55,7 @@ def get_pending_invoices(query: str = "") -> str:
     return json.dumps(summary)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Tool 2 — get_invoice_details
-# ─────────────────────────────────────────────────────────────────────────────
+# Tool 2 : get_invoice_details
 
 @tool
 def get_invoice_details(invoice_no: str) -> str:
@@ -116,9 +93,7 @@ def get_invoice_details(invoice_no: str) -> str:
     return json.dumps(row.to_dict())
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Tool 3 — generate_followup_email
-# ─────────────────────────────────────────────────────────────────────────────
+# Tool 3 : generate_followup_email
 
 def sanitize_input(text: str) -> str:
     """
@@ -217,7 +192,7 @@ def _parse_email_output(raw_text: str) -> tuple[str, str]:
             subject = line[len("subject:"):].strip()
             break
             
-    # Try to find Body (everything after the Body: marker)
+    # Try to find Body 
     lower_text = raw_text.lower()
     marker = "body:"
     if marker in lower_text:
@@ -247,9 +222,7 @@ def _parse_email_output(raw_text: str) -> tuple[str, str]:
     return subject, body
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Tool 4 — send_email
-# ─────────────────────────────────────────────────────────────────────────────
+# Tool 4 : send_email
 
 @tool
 def send_email(invoice_no: str, subject: str, body: str, to_email: str) -> str:
@@ -280,9 +253,7 @@ def send_email(invoice_no: str, subject: str, body: str, to_email: str) -> str:
     return json.dumps(result)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Tool 5 — update_invoice_record
-# ─────────────────────────────────────────────────────────────────────────────
+# Tool 5 : update_invoice_record
 
 @tool
 def update_invoice_record(invoice_no: str) -> str:
@@ -318,9 +289,8 @@ def update_invoice_record(invoice_no: str) -> str:
     })
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Tool 6 — generate_run_report
-# ─────────────────────────────────────────────────────────────────────────────
+# Tool 6 : generate_run_report
+
 
 @tool
 def generate_run_report(query: str = "") -> str:
@@ -347,9 +317,7 @@ def generate_run_report(query: str = "") -> str:
     return json.dumps(summary, indent=2)
 
 
-# -----------------------------------------------------------------------------
-# Tool 7 — process_invoice  (PRIMARY TOOL — use this for every invoice)
-# -----------------------------------------------------------------------------
+# Tool 7 : process_invoice  
 
 @tool
 def process_invoice(invoice_no: str) -> str:
@@ -369,7 +337,7 @@ def process_invoice(invoice_no: str) -> str:
 
     Returns a JSON object summarising the outcome of all four steps.
     """
-    # Step 1 — load invoice details
+    # load invoice details
     raw = json.loads(get_invoice_details.invoke(invoice_no))
     if "error" in raw:
         logger.log_action(invoice_no, "process_invoice", "error", raw["error"])
@@ -395,7 +363,7 @@ def process_invoice(invoice_no: str) -> str:
             "reason": "Escalation Cap Reached: Manual Legal/Finance review required."
         })
 
-    # Step 2 — generate email via LLM (sequential — result used in step 3)
+    # generate email via LLM 
     prompt = get_prompt_for_tier(urgency_tier)
     messages = prompt.format_messages(
         client_name=sanitize_input(raw.get("client_name", "")),
@@ -418,7 +386,7 @@ def process_invoice(invoice_no: str) -> str:
 
     logger.log_action(invoice_no, "email_generated", "ok", f"Tier: {urgency_tier}. Subject: {subject}")
 
-    # Step 3 — send (uses the actual LLM-generated content)
+    # send
     send_result = emailer_module.send_email(to=to_email, subject=subject, body=body)
     logger.log_action(
         invoice_no=invoice_no,
@@ -427,7 +395,7 @@ def process_invoice(invoice_no: str) -> str:
         reason=f"to={to_email} | status={send_result.get('status')}",
     )
 
-    # Step 4 — update CSV record (lock prevents concurrent write corruption)
+    # update CSV record
     with _csv_lock:
         df = load_invoices(config.DATA_PATH)
         try:
@@ -450,15 +418,12 @@ def process_invoice(invoice_no: str) -> str:
     })
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Exported list — pass this directly to the LangChain agent
-# ─────────────────────────────────────────────────────────────────────────────
+# Exported list
 
 ALL_TOOLS = [
     get_pending_invoices,
-    process_invoice,          # PRIMARY — agent uses this for every invoice
+    process_invoice,          
     generate_run_report,
-    # standalone tools kept for testing / direct use
     get_invoice_details,
     generate_followup_email,
     send_email,

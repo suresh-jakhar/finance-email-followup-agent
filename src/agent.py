@@ -4,13 +4,6 @@ src/agent.py
 Orchestrates the full credit follow-up pipeline:
   triage -> generate emails (LLM) -> send -> update records -> report.
 
-Architecture: Python-driven loop (not an LLM-driven ReAct loop).
-The LLM is used only where it adds value — email generation inside
-process_invoice. The outer orchestration loop is deterministic Python,
-which avoids context-window bloat on services with tight token limits.
-
-The LangGraph ReAct agent (_build_agent) is kept for reference and can
-be used if a larger-context model is available.
 """
 
 import json
@@ -22,7 +15,6 @@ from langgraph.prebuilt import create_react_agent
 from src import config, logger
 from src.tools import ALL_TOOLS, get_pending_invoices, process_invoice, generate_run_report
 
-# ── System prompt (used by _build_agent / full-LLM mode) ─────────────────────
 
 _AGENT_SYSTEM_PROMPT = """You are an autonomous finance credit follow-up agent for a company.
 
@@ -52,8 +44,6 @@ def _build_agent(verbose: bool = True):
     """
     Construct and return the LangGraph ReAct agent with all tools attached.
 
-    Note: Requires a model with a large context window (>= 8k tokens)
-    to handle the full 85-invoice payload without hitting rate limits.
     """
     llm = ChatGroq(
         model=config.LLM_MODEL,
@@ -70,15 +60,6 @@ def _build_agent(verbose: bool = True):
 
 def run_agent(limit: int = None, verbose: bool = True) -> dict:
     """
-    Orchestrate the full follow-up pipeline and return the run summary.
-
-    Uses a Python-driven sequential loop rather than an LLM ReAct loop.
-    This avoids context-window accumulation when processing large invoice
-    datasets on free-tier LLM APIs (e.g. Groq's 6k-token limit).
-
-    The LLM is still called for every invoice — inside process_invoice —
-    to generate a personalised email. Only the outer loop is Python.
-
     Args:
         limit: Maximum number of invoices to process in this run. If None, process all.
         verbose: If True, prints progress for each invoice.

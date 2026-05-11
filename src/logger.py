@@ -1,17 +1,9 @@
-"""
-src/logger.py
-
-Structured, append-only in-memory logger for a single agent run.
-Writes a JSON run report to the outputs/ directory at the end of the run.
-"""
-
 import re
 import json
 from datetime import datetime, timezone
 from pathlib import Path
 
 
-# In-memory log for the current run — module-level so every tool call appends here.
 _log: list[dict] = []
 
 
@@ -27,7 +19,7 @@ def mask_pii(text: str) -> str:
             return f"***@{domain}"
         return f"{user[0]}***@{domain}"
 
-    # Simple email regex for masking
+    # email regex for masking
     email_pattern = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
     return re.sub(email_pattern, _replacer, text)
 
